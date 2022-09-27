@@ -10,7 +10,7 @@ constexpr int FIELD_WIDTH {12};
 constexpr int FIELD_HEIGHT {18};
 
 void drawField();
-int getPieceIndexForRotation(const int x, const int y, const int r);
+int getPieceIndexForRotation(const std::string & piece, const int x, const int y, const int r);
 bool pieceDoesFit(const int shapeNum, const int rotation, const int x, const int y);
 
 int main()
@@ -20,47 +20,43 @@ int main()
 	// -------------------------
 	std::array<std::string, 7> tetromino;
 	
+	// Basing the strings on the Super Rotation System:
+	// https://tetris.fandom.com/wiki/SRS
+	
 	// I
-	tetromino[0].append("..X.");
-	tetromino[0].append("..X.");
-	tetromino[0].append("..X.");
-	tetromino[0].append("..X.");
+	tetromino[0].append("....");
+	tetromino[0].append("XXXX");
+	tetromino[0].append("....");
+	tetromino[0].append("....");
 
 	// Z
-	tetromino[1].append("..X.");
-	tetromino[1].append(".XX.");
-	tetromino[1].append(".X..");
-	tetromino[1].append("....");
+	tetromino[1].append("XX.");
+	tetromino[1].append(".XX");
+	tetromino[1].append("...");
 
 	// S
-	tetromino[2].append(".X..");
-	tetromino[2].append(".XX.");
-	tetromino[2].append("..X.");
-	tetromino[2].append("....");
+	tetromino[2].append(".XX");
+	tetromino[2].append("XX.");
+	tetromino[2].append("...");
 
 	// O
-	tetromino[3].append("....");
-	tetromino[3].append(".XX.");
-	tetromino[3].append(".XX.");
-	tetromino[3].append("....");
+	tetromino[3].append("XX");
+	tetromino[3].append("XX");
 
 	// T
-	tetromino[4].append("..X.");
-	tetromino[4].append(".XX.");
-	tetromino[4].append("..X.");
-	tetromino[4].append("....");
+	tetromino[4].append(".X.");
+	tetromino[4].append("XXX.");
+	tetromino[4].append("...");
 
 	// L
-	tetromino[5].append("....");
-	tetromino[5].append(".XX.");
-	tetromino[5].append("..X.");
-	tetromino[5].append("..X.");
+	tetromino[5].append("..X");
+	tetromino[5].append("XXX");
+	tetromino[5].append("...");
 
 	// J
-	tetromino[6].append("....");
-	tetromino[6].append(".XX.");
-	tetromino[6].append(".X..");
-	tetromino[6].append(".X..");
+	tetromino[6].append("X..");
+	tetromino[6].append("XXX");
+	tetromino[6].append("...");
 
 	// -------------------------
 	// Initialize ncurses screen
@@ -154,40 +150,79 @@ void drawField()
 }
 
 
-int getPieceIndexForRotation(const int x, const int y, const int r)
+int getPieceIndexForRotation(const std::string & piece, const int x, const int y, const int r)
 {
 	int index {0};
+
+	const int len = piece.length();
+
+	if (len < 3)
+		return index;
+
+	// For 3x3 shapes:
+	//
+	// 0 degrees:
+	// 0 1 2
+	// 3 4 5
+	// 6 7 8
+	//
+	// 90 degrees:
+	// 6 3 0
+	// 7 4 1
+	// 8 5 2
+	//
+	// 180 degrees
+	// 8 7 6
+	// 5 4 3
+	// 2 1 0
+	//
+	// 270 degrees
+	// 2 5 8
+	// 1 4 7
+	// 0 3 6
+
+	// For 4x4 shapes:
+	//
+	// 0 degrees:
+	//  0  1  2  3
+	//  4  5  6  7
+	//  8  9 10 11
+	// 12 13 14 15
+	//
+	// 90 degrees:
+	// 12  8  4  0
+	// 13  9  5  1
+	// 14 10  6  2
+	// 15 11  7  3
+	//
+	// 180 degrees
+	// 15 14 13 12
+	// 11 10  9  8
+	//  7  6  5  4
+	//  3  2  1  0
+	//
+	// 270 degrees
+	//  3  7 11 15
+	//  2  6 10 14
+	//  1  5  9 13
+	//  0  4  8 12
+		
 	switch (r % 4)
 	{
 	case 0:
-		// 0 degrees:
-		//  0  1  2  3
-		//  4  5  6  7
-		//  8  9 10 11
-		// 12 13 14 15
-		index = (y * 4) + x;
+		index = (y * len) + x;
+		break;
 	case 1:
-		// 90 degrees:
-		// 12  8  4  0
-		// 13  9  5  1
-		// 14 10  6  2
-		// 15 11  7  3
-		index = 12 + y - (x * 4);
+		index = (len * (len - 1)) + y - (x * len);
+		break;
 	case 2:
-		// 180 degrees
-		// 15 14 13 12
-		// 11 10  9  8
-		//  7  6  5  4
-		//  3  2  1  0
-		index = 15 - (y * 4) - x;
+		index = ((len * len) - 1) - (y * len) - x;
+		break;
 	case 3:
-		// 270 degrees
-		//  3  7 11 15
-		//  2  6 10 14
-		//  1  5  9 13
-		//  0  4  8 12
-		index = 3 - y + (x * 4);
+		index = (len - 1) - y + (x * len);
+		break;
 	}
+
 	return index;
 }
 
@@ -198,8 +233,8 @@ bool pieceDoesFit(const int shapeNum, const int rotation, const int currentX, co
 	{
 		for (int y = 0; y < 4; y++)
 		{
-			int pieceIndex = getPieceIndexForRotation(currentX, currentY, rotation);
-			int fieldIndex = ;
+			//int pieceIndex = getPieceIndexForRotation(currentX, currentY, rotation);
+			//int fieldIndex = ;
 		}
 	}
 
