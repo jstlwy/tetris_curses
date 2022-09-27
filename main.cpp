@@ -8,17 +8,23 @@
 
 constexpr int FIELD_WIDTH {12};
 constexpr int FIELD_HEIGHT {18};
+constexpr int FIELD_LENGTH {FIELD_WIDTH * FIELD_HEIGHT};
+constexpr int NUM_TETROMINOES {7};
+constexpr int NUM_SPRITES {10};
 
-void drawField();
+void drawField(std::array<int, FIELD_LENGTH> & field, std::array<char, NUM_SPRITES> & charSprites);
+
 int getPieceIndexForRotation(const std::string & piece, const int x, const int y, const int r);
-bool pieceDoesFit(const int shapeNum, const int rotation, const int x, const int y);
+
+bool pieceDoesFit(const std::array<int, FIELD_LENGTH> field, const std::string & piece,
+                  const int rotation, const int pieceX, const int pieceY);
 
 int main()
 {
 	// -------------------------
 	// Initialize piece shapes
 	// -------------------------
-	std::array<std::string, 7> tetromino;
+	std::array<std::string, NUM_TETROMINOES> tetromino;
 	
 	// Basing the strings on the Super Rotation System:
 	// https://tetris.fandom.com/wiki/SRS
@@ -58,6 +64,23 @@ int main()
 	tetromino[6].append("XXX");
 	tetromino[6].append("...");
 
+	// Every character that will be used to draw the screen
+	std::array<char, NUM_SPRITES> charSprites {'I', 'Z', 'S', 'O', 'T', 'L', 'J', '=', '#', ' '};
+
+	// -------------------------
+	// Initialize field tracker
+	// -------------------------
+	std::array<int, FIELD_LENGTH> field;
+	for (int y = 0; y < FIELD_HEIGHT; y++)
+	{
+		const int currentLineNum = y * FIELD_WIDTH;
+		for (int x = 0; x < FIELD_WIDTH; x++)
+		{
+			const int i = currentLineNum + x;
+			field[i] = (x == 0 || x == FIELD_WIDTH - 1 || y == FIELD_HEIGHT - 1) ? 8 : 9;
+		}
+	}
+
 	// -------------------------
 	// Initialize ncurses screen
 	// -------------------------
@@ -83,9 +106,9 @@ int main()
 	int currentPiece {tetrominoDistribution(randomEngine)};
 	int currentRotation {0};
 	int numTicks {0};
-	int maxTicks {20};
-	int currentX {FIELD_WIDTH / 2};
-	int currentY {0};
+	int maxTicksPerLine {20};
+	int currentX {4};
+	int currentY {1};
 	int speed {20};
 
 	bool shouldForceDownward {false};
@@ -93,10 +116,9 @@ int main()
 	int numPieces {0};
 	int score {0};
 
-	//std::string screenChars {" ABCDEFG=#"};
 	
 	// Ensure game begins with the screen drawn
-	drawField();
+	drawField(field, charSprites);
 
 	bool gameOver {false};
 	while (!gameOver)
@@ -104,7 +126,7 @@ int main()
 		// Manage game timing
 		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 		numTicks++;
-		shouldForceDownward = (numTicks == maxTicks);
+		shouldForceDownward = (numTicks == maxTicksPerLine);
 
 		// Get input
 		const char keyInput = getch();
@@ -123,9 +145,8 @@ int main()
 		// Execute game logic
 		// First, handle player movement
 
-
 		// Draw screen
-		drawField();
+		drawField(field, charSprites);
 	}
 
 	endwin();
@@ -133,17 +154,18 @@ int main()
 }
 
 
-void drawField()
+void drawField(std::array<int, FIELD_LENGTH> & field, std::array<char, NUM_SPRITES> & charSprites)
 {
 	clear();
-	for (int x = 0; x < FIELD_WIDTH; x++)
+	for (int y = 0; y < FIELD_HEIGHT; y++)
 	{
-		for (int y = 0; y < FIELD_HEIGHT; y++)
+		const int currentLineNum = y * FIELD_WIDTH;
+		for (int x = 0; x < FIELD_WIDTH; x++)
 		{
-			if (x == 0 || x == FIELD_WIDTH - 1 || y == FIELD_HEIGHT - 1)
-			{
-				mvprintw(y, x, "#");
-			}
+			const int index = currentLineNum + x;
+			const int charSpriteNum = field.at(index);
+			const char charSprite = charSprites.at(charSpriteNum);
+			mvaddch(y, x, charSprite);
 		}
 	}
 	refresh();
@@ -156,6 +178,7 @@ int getPieceIndexForRotation(const std::string & piece, const int x, const int y
 
 	const int len = piece.length();
 
+	// "O" block rotations are irrelevant
 	if (len < 3)
 		return index;
 
@@ -171,12 +194,12 @@ int getPieceIndexForRotation(const std::string & piece, const int x, const int y
 	// 7 4 1
 	// 8 5 2
 	//
-	// 180 degrees
+	// 180 degrees:
 	// 8 7 6
 	// 5 4 3
 	// 2 1 0
 	//
-	// 270 degrees
+	// 270 degrees:
 	// 2 5 8
 	// 1 4 7
 	// 0 3 6
@@ -195,13 +218,13 @@ int getPieceIndexForRotation(const std::string & piece, const int x, const int y
 	// 14 10  6  2
 	// 15 11  7  3
 	//
-	// 180 degrees
+	// 180 degrees:
 	// 15 14 13 12
 	// 11 10  9  8
 	//  7  6  5  4
 	//  3  2  1  0
 	//
-	// 270 degrees
+	// 270 degrees:
 	//  3  7 11 15
 	//  2  6 10 14
 	//  1  5  9 13
@@ -227,14 +250,27 @@ int getPieceIndexForRotation(const std::string & piece, const int x, const int y
 }
 
 
-bool pieceDoesFit(const int shapeNum, const int rotation, const int currentX, const int currentY)
+bool pieceDoesFit(const std::array<int, FIELD_LENGTH> field, const std::string & piece,
+                  const int rotation, const int pieceX, const int pieceY)
 {
-	for (int x = 0; x < 4; x++)
+	for (int y = 0; y < piece.length(); y++)
 	{
-		for (int y = 0; y < 4; y++)
+		const int currentLineNum = (pieceY + y) * FIELD_WIDTH;
+		for (int x = 0; x < piece.length(); x++)
 		{
-			//int pieceIndex = getPieceIndexForRotation(currentX, currentY, rotation);
-			//int fieldIndex = ;
+			// Make sure not to go out of bounds
+			if (pieceX + x < 1 || pieceX + x >= FIELD_WIDTH || pieceY + y >= FIELD_HEIGHT)
+			{
+				continue;
+			}
+
+			const int pieceIndex = getPieceIndexForRotation(piece, pieceX, pieceY, rotation);
+			const int fieldIndex = currentLineNum + (pieceX + x);
+
+			if (piece.at(pieceIndex) == 'X' && field.at(fieldIndex) != 0)
+			{
+				return false;
+			}
 		}
 	}
 
