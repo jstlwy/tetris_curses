@@ -1,7 +1,3 @@
-// Based on Javidx9's version for Windows:
-// https://youtu.be/8OK8_tHeCIA
-// https://github.com/OneLoneCoder/Javidx9/blob/master/SimplyCode/OneLoneCoder_Tetris.cpp
-
 #include <ncurses.h>
 #include <time.h>
 #include <string>
