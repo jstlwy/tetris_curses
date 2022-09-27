@@ -11,21 +11,21 @@ constexpr int FIELD_WIDTH {12};
 constexpr int FIELD_HEIGHT {18};
 constexpr int FIELD_LENGTH {FIELD_WIDTH * FIELD_HEIGHT};
 constexpr int NUM_TETROMINOES {7};
-constexpr int NUM_SPRITES {10};
 
-void drawField(std::array<int, FIELD_LENGTH> & field,
-               std::array<char, NUM_SPRITES> & charSprites);
+void drawField(std::array<char, FIELD_LENGTH> & field);
 
 void drawPiece(const std::string & piece,
-               const std::array<char, NUM_SPRITES> & charSprites,
-               const int currentX, const int currentY, const int currentRotation);
+               const int currentX, const int currentY,
+               const int currentRotation);
 
-int getPieceIndexForRotation(const std::string & piece, const int x,
-                             const int y, const int rotation);
+int getPieceIndexForRotation(const std::string & piece,
+                             const int x, const int y,
+                             const int rotation);
 
-bool pieceDoesFit(const std::array<int, FIELD_LENGTH> field,
-                  const std::string & piece, const int rotation,
-                  const int pieceX, const int pieceY);
+bool pieceDoesFit(const std::array<char, FIELD_LENGTH> field,
+                  const std::string & piece,
+                  const int pieceX, const int pieceY,
+				  const int rotation);
 
 int getSideLength(const int pieceLength);
 
@@ -74,20 +74,17 @@ int main()
 	tetromino[6].append("JJJ");
 	tetromino[6].append("   ");
 
-	// Every character that will be used to draw the screen
-	std::array<char, NUM_SPRITES> charSprites {'I', 'Z', 'S', 'O', 'T', 'L', 'J', '=', '#', ' '};
-
-	// ------------------------------
-	// Initialize field status map
-	// ------------------------------
-	std::array<int, FIELD_LENGTH> field;
+	// -------------------------
+	// Initialize field map
+	// -------------------------
+	std::array<char, FIELD_LENGTH> field;
 	for (int y = 0; y < FIELD_HEIGHT; y++)
 	{
 		const int currentLineNum = y * FIELD_WIDTH;
 		for (int x = 0; x < FIELD_WIDTH; x++)
 		{
 			const int i = currentLineNum + x;
-			field[i] = (x == 0 || x == FIELD_WIDTH - 1 || y == FIELD_HEIGHT - 1) ? 8 : 9;
+			field[i] = (x == 0 || x == FIELD_WIDTH - 1 || y == FIELD_HEIGHT - 1) ? '#' : ' ';
 		}
 	}
 
@@ -114,6 +111,7 @@ int main()
 
 	// Game state variables
 	int currentPieceNum {tetrominoDistribution(randomEngine)};
+	std::string currentPiece {tetromino[currentPieceNum]};
 	int currentRotation {0};
 	int currentX {4};
 	int currentY {1};
@@ -125,11 +123,11 @@ int main()
 	bool shouldForceDownward {false};
 	bool shouldStopRotation {true};
 
-	int numPieces {0};
+	int numLinesCleared {0};
 	int score {0};
 	
 	// Ensure game begins with the screen drawn
-	drawField(field, charSprites);
+	drawField(field);
 
 	bool gameOver {false};
 	while (!gameOver)
@@ -139,61 +137,106 @@ int main()
 		numTicks++;
 		shouldForceDownward = (numTicks >= maxTicksPerLine);
 
-		std::string currentPiece = tetromino[currentPieceNum];
-
-		// Get input
+		// Process input
 		const int keyInput = getch();
-		int newRotation;
+		int newRotation {currentRotation};
 		shouldStopRotation = true;
-		bool canGoDown;
+		bool shouldFixInPlace {false};
 		switch (keyInput)
 		{
 		case 'h':
 		case 'H':
 		case KEY_LEFT:
-			currentX -= pieceDoesFit(field, currentPiece, currentRotation, currentX - 1, currentY) ? 1 : 0;
+			currentX -= pieceDoesFit(field, currentPiece, currentX - 1, currentY, currentRotation) ? 1 : 0;
 			break;
 		case 'l':
 		case 'L':
 		case KEY_RIGHT:
-			currentX += pieceDoesFit(field, currentPiece, currentRotation, currentX + 1, currentY) ? 1 : 0;
+			currentX += pieceDoesFit(field, currentPiece, currentX + 1, currentY, currentRotation) ? 1 : 0;
 			break;
 		case 'j':
 		case 'J':
 		case KEY_DOWN:
-			canGoDown = pieceDoesFit(field, currentPiece, currentRotation, currentX, currentY + 1);
-			currentY += canGoDown ? 1 : 0;
-			numTicks = canGoDown ? 0 : numTicks;
+			shouldFixInPlace = !pieceDoesFit(field, currentPiece, currentX, currentY + 1, currentRotation);
+			currentY += shouldFixInPlace ? 0 : 1;
+			shouldForceDownward = false;
+			numTicks = 0;
 			break;
 		case 'a':
 		case 'A':
-			// Rotate 90 degrees counterclockwise
-			newRotation = (currentRotation == 0) ? 3 : currentRotation - 1;
-			currentRotation = pieceDoesFit(field, currentPiece, newRotation, currentX, currentY) ? newRotation : currentRotation;
-			shouldStopRotation = false;
-			break;
 		case 's':
 		case 'S':
-			// Rotate 90 degrees clockwise
-			newRotation = (currentRotation == 3) ? 0 : currentRotation + 1;
-			currentRotation = pieceDoesFit(field, currentPiece, newRotation, currentX, currentY) ? newRotation : currentRotation;
+			if (keyInput == 'a' || keyInput == 'A')
+			{
+				// Rotate 90 degrees counterclockwise
+				newRotation = (currentRotation == 0) ? 3 : currentRotation - 1;
+			}
+			else
+			{
+				// Rotate 90 degrees clockwise
+				newRotation = (currentRotation == 3) ? 0 : currentRotation + 1;
+			}
+			currentRotation = pieceDoesFit(field, currentPiece, currentX, currentY, newRotation) ? newRotation : currentRotation;
 			shouldStopRotation = false;
 			break;
 		}
 
 		if (shouldForceDownward)
 		{
-			if (numTicks > 0)
+			if (pieceDoesFit(field, currentPiece, currentX, currentY + 1, currentRotation))
 			{
-				currentY += pieceDoesFit(field, currentPiece, currentRotation, currentX, currentY + 1) ? 1 : 0;
-				numTicks = 0;
+				currentY++;
 			}
+			else
+			{
+				shouldFixInPlace = true;
+			}
+			numTicks = 0;
 			shouldForceDownward = false;
 		}
 
+		if (shouldFixInPlace)
+		{
+			if (currentY <= 1)
+			{
+				gameOver = true;
+			}
+			else
+			{
+				// Add piece to field map
+				const int sideLength = getSideLength(currentPiece.length());
+				for (int y = 0; y < sideLength; y++)
+				{
+					for (int x = 0; x < sideLength; x++)
+					{
+						const int pieceIndex = getPieceIndexForRotation(currentPiece, x, y, currentRotation);
+						const char charSprite = currentPiece.at(pieceIndex);
+						if (charSprite != ' ')
+						{
+							const int fieldIndex = ((y + currentY) * FIELD_WIDTH) + (x + currentX);
+							field.at(fieldIndex) = charSprite;
+						}
+					}
+				}
+
+				// Check if any lines should be cleared
+				// TODO
+
+				// Update game state
+				currentPieceNum = tetrominoDistribution(randomEngine);
+				currentPiece = tetromino[currentPieceNum];
+				currentRotation = 0;
+				currentX = 4;
+				currentY = 1;
+			}
+		}
+
 		// Draw screen
-		drawField(field, charSprites);
-		drawPiece(currentPiece, charSprites, currentX, currentY, currentRotation);
+		drawField(field);
+		if (!shouldFixInPlace)
+		{
+			drawPiece(currentPiece, currentX, currentY, currentRotation);
+		}
 	}
 
 	endwin();
@@ -201,18 +244,16 @@ int main()
 }
 
 
-void drawField(std::array<int, FIELD_LENGTH> & field,
-               std::array<char, NUM_SPRITES> & charSprites)
+void drawField(std::array<char, FIELD_LENGTH> & field)
 {
 	clear();
 	for (int y = 0; y < FIELD_HEIGHT; y++)
 	{
-		const int currentLineNum = y * FIELD_WIDTH;
+		const int yOffset = y * FIELD_WIDTH;
 		for (int x = 0; x < FIELD_WIDTH; x++)
 		{
-			const int index = currentLineNum + x;
-			const int charSpriteNum = field.at(index);
-			const char charSprite = charSprites.at(charSpriteNum);
+			const int fieldIndex = yOffset + x;
+			const char charSprite = field.at(fieldIndex);
 			mvaddch(y, x, charSprite);
 		}
 	}
@@ -221,8 +262,8 @@ void drawField(std::array<int, FIELD_LENGTH> & field,
 
 
 void drawPiece(const std::string & piece,
-               const std::array<char, NUM_SPRITES> & charSprites,
-               const int currentX, const int currentY, const int currentRotation)
+               const int currentX, const int currentY,
+               const int currentRotation)
 {
 	const int sideLength = getSideLength(piece.length());
 
@@ -232,10 +273,12 @@ void drawPiece(const std::string & piece,
 		for (int x = 0; x < sideLength; x++)
 		{
 			const int pieceIndex = getPieceIndexForRotation(piece, x, y, currentRotation);
-			//std::cout << "x: " << x << ", y: " << y << ", pieceIndex: " << pieceIndex << "\n";
 			const char charSprite = piece.at(pieceIndex);
-			const int drawX = currentX + x;
-			mvaddch(drawY, drawX, charSprite);
+			if (charSprite != ' ')
+			{
+				const int drawX = currentX + x;
+				mvaddch(drawY, drawX, charSprite);
+			}
 		}
 	}
 
@@ -249,7 +292,8 @@ int getPieceIndexForRotation(const std::string & piece,
 {
 	int index {0};
 
-	const int sideLength = getSideLength(piece.length());
+	const int numPoints = piece.length();
+	const int sideLength = getSideLength(numPoints);
 
 	// "O" block rotations are irrelevant
 	if (sideLength < 3)
@@ -309,10 +353,10 @@ int getPieceIndexForRotation(const std::string & piece,
 		index = (y * sideLength) + x;
 		break;
 	case 1:
-		index = (sideLength * (sideLength - 1)) + y - (x * sideLength);
+		index = (numPoints - sideLength) + y - (x * sideLength);
 		break;
 	case 2:
-		index = ((sideLength * sideLength) - 1) - (y * sideLength) - x;
+		index = (numPoints - 1) - (y * sideLength) - x;
 		break;
 	case 3:
 		index = (sideLength - 1) - y + (x * sideLength);
@@ -324,15 +368,16 @@ int getPieceIndexForRotation(const std::string & piece,
 }
 
 
-bool pieceDoesFit(const std::array<int, FIELD_LENGTH> field,
-                  const std::string & piece, const int rotation,
-                  const int pieceX, const int pieceY)
+bool pieceDoesFit(const std::array<char, FIELD_LENGTH> field,
+                  const std::string & piece,
+                  const int pieceX, const int pieceY,
+                  const int rotation)
 {
 	const int sideLength = getSideLength(piece.length());
 
 	for (int y = 0; y < sideLength; y++)
 	{
-		const int fieldYOffset = pieceY + (y * FIELD_WIDTH);
+		const int fieldYOffset = (pieceY + y) * FIELD_WIDTH;
 		for (int x = 0; x < sideLength; x++)
 		{
 			const int pieceIndex = getPieceIndexForRotation(piece, x, y, rotation);
@@ -340,7 +385,7 @@ bool pieceDoesFit(const std::array<int, FIELD_LENGTH> field,
 			{
 				const bool isOutsideField = (pieceX + x < 1 || pieceX + x >= FIELD_WIDTH || pieceY + y >= FIELD_HEIGHT);
 				const int fieldIndex = fieldYOffset + (pieceX + x);
-				if (isOutsideField || field.at(fieldIndex) != 9)
+				if (isOutsideField || field.at(fieldIndex) != ' ')
 				{
 					return false;
 				}
@@ -369,3 +414,4 @@ int getSideLength(const int pieceLength)
 	}
 	return sideLength;
 }
+
