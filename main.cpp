@@ -1,5 +1,4 @@
 #include <ncurses.h>
-#include <iostream>
 #include <time.h>
 #include <string>
 #include <array>
