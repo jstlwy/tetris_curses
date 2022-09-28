@@ -3,7 +3,6 @@
 #include <time.h>
 #include <string>
 #include <array>
-#include <vector>
 #include <thread>
 #include <chrono>
 #include <random>
@@ -123,7 +122,6 @@ int main()
 
 	bool shouldForceDownward {false};
 	bool shouldStopRotation {true};
-	std::vector<int> linesToClear;
 
 	int numLinesCleared {0};
 	int score {0};
@@ -197,6 +195,9 @@ int main()
 			shouldForceDownward = false;
 		}
 
+		int numLinesToClear {0};
+		int lowestLineToClear {0};
+
 		if (shouldFixInPlace)
 		{
 			if (currentY <= 1)
@@ -254,8 +255,10 @@ int main()
 							const int fieldIndex = fieldYOffset + x;
 							field.at(fieldIndex) = '=';
 						}
+
 						// Save the location of this line so it can be cleared later
-						linesToClear.add(currentY + y);
+						lowestLineToClear = y + currentY;
+						numLinesToClear++;
 					}
 				}
 
@@ -279,19 +282,37 @@ int main()
 
 		// If there are any lines that need to disappear,
 		// alter the field map array and redraw the field
-		if (!linesToClear.empty())
+		if (numLinesToClear > 0)
 		{
 			// Wait for a short duration to allow the player
 			// to see the blocks disappearing
 			std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
+			const int oldYOffset = numLinesToClear * FIELD_WIDTH;
+
 			// Move everything in the field array down
-			for (const int lineNum : linesToClear)
+			for (int y = lowestLineToClear; y >= 0; y--)
 			{
-						
+				const int fieldYOffset = y * FIELD_WIDTH;
+				for (int x = 1; x < FIELD_WIDTH - 1; x++)
+				{
+					const int newFieldIndex = fieldYOffset + x;
+					if (y <= numLinesToClear)
+					{
+						field.at(newFieldIndex) = ' ';
+					}
+					else
+					{
+						const int oldFieldIndex = newFieldIndex - oldYOffset;
+						field.at(newFieldIndex) = field.at(oldFieldIndex);
+					}
+				}
 			}
 
 			drawField(field);
+
+			// Keep track of player progress
+			numLinesCleared += numLinesToClear;
 		}
 	}
 
