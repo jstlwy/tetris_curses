@@ -3,6 +3,7 @@
 #include <time.h>
 #include <string>
 #include <array>
+#include <vector>
 #include <thread>
 #include <chrono>
 #include <random>
@@ -122,6 +123,7 @@ int main()
 
 	bool shouldForceDownward {false};
 	bool shouldStopRotation {true};
+	std::vector<int> linesToClear;
 
 	int numLinesCleared {0};
 	int score {0};
@@ -207,20 +209,55 @@ int main()
 				const int sideLength = getSideLength(currentPiece.length());
 				for (int y = 0; y < sideLength; y++)
 				{
+					const int fieldYOffset = (currentY + y) * FIELD_WIDTH;
 					for (int x = 0; x < sideLength; x++)
 					{
 						const int pieceIndex = getPieceIndexForRotation(currentPiece, x, y, currentRotation);
 						const char charSprite = currentPiece.at(pieceIndex);
 						if (charSprite != ' ')
 						{
-							const int fieldIndex = ((y + currentY) * FIELD_WIDTH) + (x + currentX);
+							const int fieldIndex = fieldYOffset + (x + currentX);
 							field.at(fieldIndex) = charSprite;
 						}
 					}
 				}
 
 				// Check if any lines should be cleared
-				// TODO
+				for (int y = 0; y < sideLength; y++)
+				{
+					// Stop if going outside the boundaries
+					if (currentY + y >= FIELD_HEIGHT - 1)
+					{
+						break;
+					}
+
+					// Begin with the assumption that the line is full of blocks
+					bool lineIsFull {true};
+					const int fieldYOffset = (currentY + y) * FIELD_WIDTH;
+
+					// Check whether there are any empty spaces in the line
+					for (int x = 1; x < FIELD_WIDTH - 1; x++)
+					{
+						const int fieldIndex = fieldYOffset + x;
+						if (field.at(fieldIndex) == ' ')
+						{
+							lineIsFull = false;
+							break;
+						}
+					}
+
+					if (lineIsFull)
+					{
+						// Rewrite all the characters with '='
+						for (int x = 1; x < FIELD_WIDTH - 1; x++)
+						{
+							const int fieldIndex = fieldYOffset + x;
+							field.at(fieldIndex) = '=';
+						}
+						// Save the location of this line so it can be cleared later
+						linesToClear.add(currentY + y);
+					}
+				}
 
 				// Update game state
 				currentPieceNum = tetrominoDistribution(randomEngine);
@@ -233,9 +270,28 @@ int main()
 
 		// Draw screen
 		drawField(field);
+
+		// Draw any floating pieces
 		if (!shouldFixInPlace)
 		{
 			drawPiece(currentPiece, currentX, currentY, currentRotation);
+		}
+
+		// If there are any lines that need to disappear,
+		// alter the field map array and redraw the field
+		if (!linesToClear.empty())
+		{
+			// Wait for a short duration to allow the player
+			// to see the blocks disappearing
+			std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+			// Move everything in the field array down
+			for (const int lineNum : linesToClear)
+			{
+						
+			}
+
+			drawField(field);
 		}
 	}
 
