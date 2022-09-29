@@ -28,6 +28,9 @@ bool pieceDoesFit(const std::array<char, FIELD_LENGTH> field,
 
 int getSideLength(const int pieceLength);
 
+void shuffleArray(std::array<int, NUM_TETROMINOES> & bag,
+                  std::default_random_engine & re);
+
 int main()
 {
 	// -------------------------
@@ -106,11 +109,19 @@ int main()
 	// Initialize random number generator
 	std::random_device rd;
 	std::default_random_engine randomEngine(rd());
-	std::uniform_int_distribution<int> tetrominoDistribution(0, 6);
+
+	// Initialize the array to hold tetromino sequence
+	std::array<int, NUM_TETROMINOES> pieceBag;
+	for (int i = 0; i < pieceBag.size(); i++)
+	{
+		pieceBag.at(i) = i;
+	}
+	shuffleArray(pieceBag, randomEngine);
 
 	// Game state variables
-	int currentPieceNum {tetrominoDistribution(randomEngine)};
-	std::string currentPiece {tetromino[currentPieceNum]};
+	int currentBagIndex {0};
+	int currentPieceNum {pieceBag.at(currentBagIndex)};
+	std::string currentPiece {tetromino.at(currentPieceNum)};
 	int currentRotation {0};
 	int currentX {4};
 	int currentY {1};
@@ -262,8 +273,14 @@ int main()
 				}
 
 				// Update game state
-				currentPieceNum = tetrominoDistribution(randomEngine);
-				currentPiece = tetromino[currentPieceNum];
+				currentBagIndex++;
+				if (currentBagIndex >= pieceBag.size())
+				{
+					currentBagIndex = 0;
+					shuffleArray(pieceBag, randomEngine);
+				}
+				currentPieceNum = pieceBag.at(currentBagIndex);
+				currentPiece = tetromino.at(currentPieceNum);
 				currentRotation = 0;
 				currentX = 4;
 				currentY = 1;
@@ -439,7 +456,6 @@ int getPieceIndexForRotation(const std::string & piece,
 		break;
 	}
 
-	//std::cout << "sideLength: " << sideLength << ", x: " << x << ", y: " << y << ", rotation: " << rotation << ", index: " << index << "\n";
 	return index;
 }
 
@@ -491,3 +507,17 @@ int getSideLength(const int pieceLength)
 	return sideLength;
 }
 
+
+void shuffleArray(std::array<int, NUM_TETROMINOES> & bag,
+                  std::default_random_engine & re)
+{
+	// Fisher-Yates shuffle
+	for (int i = bag.size() - 1; i >= 1; i--)
+	{
+		std::uniform_int_distribution<int> intDist(0, i);
+		const int j = intDist(re);
+		const int temp = bag.at(i);
+		bag.at(i) = bag.at(j);
+		bag.at(j) = temp;
+	}
+}
