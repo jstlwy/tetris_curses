@@ -27,10 +27,10 @@ int getPieceIndexForRotation(const std::string & piece,
                              const int x, const int y,
                              const int rotation);
 
-bool pieceDoesFit(const std::array<char, FIELD_LENGTH> field,
-                  const std::string & piece,
-                  const int pieceX, const int pieceY,
-				  const int rotation);
+bool pieceCanFit(const std::array<char, FIELD_LENGTH> & field,
+                 const std::string & piece,
+                 const int pieceX, const int pieceY,
+                 const int rotation);
 
 int getSideLength(const int pieceLength);
 
@@ -88,11 +88,14 @@ int main()
 	std::array<char, FIELD_LENGTH> field;
 	for (int y = 0; y < FIELD_HEIGHT; y++)
 	{
-		const int currentLineNum = y * FIELD_WIDTH;
+		const int fieldRow = y * FIELD_WIDTH;
 		for (int x = 0; x < FIELD_WIDTH; x++)
 		{
-			const int i = currentLineNum + x;
-			field[i] = (x == 0 || x == FIELD_WIDTH - 1 || y == FIELD_HEIGHT - 1) ? '#' : ' ';
+			const int i = fieldRow + x;
+			if (x == 0 || x == FIELD_WIDTH - 1 || y == FIELD_HEIGHT - 1)
+				field[i] = '#';
+			else
+				field[i] = ' ';
 		}
 	}
 
@@ -153,9 +156,7 @@ int main()
 	bool gameOver {false};
 	while (!gameOver)
 	{
-		// Manage game timing
 		const auto timeStart = std::chrono::system_clock::now();
-		numTicks++;
 		shouldForceDownward = (numTicks >= maxTicksPerLine);
 
 		// Process input
@@ -167,44 +168,49 @@ int main()
 		case 'h':
 		case 'H':
 		case KEY_LEFT:
-			currentX -= pieceDoesFit(field, currentPiece, currentX - 1, currentY, currentRotation) ? 1 : 0;
+			if (pieceCanFit(field, currentPiece, currentX-1, currentY, currentRotation))
+				currentX--;
 			break;
 		case 'l':
 		case 'L':
 		case KEY_RIGHT:
-			currentX += pieceDoesFit(field, currentPiece, currentX + 1, currentY, currentRotation) ? 1 : 0;
+			if (pieceCanFit(field, currentPiece, currentX+1, currentY, currentRotation))
+				currentX++;
 			break;
 		case 'j':
 		case 'J':
 		case KEY_DOWN:
-			shouldFixInPlace = !pieceDoesFit(field, currentPiece, currentX, currentY + 1, currentRotation);
-			currentY += shouldFixInPlace ? 0 : 1;
-			shouldForceDownward = false;
-			numTicks = 0;
+			shouldForceDownward = true;
 			break;
 		case 'a':
 		case 'A':
+			// Rotate 90 degrees counterclockwise
+			if (newRotation == 0)
+				newRotation = 3;
+			else
+				newRotation--;
+			break;
 		case 's':
 		case 'S':
-			if (keyInput == 'a' || keyInput == 'A')
-			{
-				// Rotate 90 degrees counterclockwise
-				newRotation = (currentRotation == 0) ? 3 : currentRotation - 1;
-			}
+			// Rotate 90 degrees clockwise
+			if (newRotation == 3)
+				newRotation = 0;
 			else
-			{
-				// Rotate 90 degrees clockwise
-				newRotation = (currentRotation == 3) ? 0 : currentRotation + 1;
-			}
-			currentRotation = pieceDoesFit(field, currentPiece, currentX, currentY, newRotation) ? newRotation : currentRotation;
+				newRotation++;
 			break;
 		default:
 			break;
 		}
 
+		if (newRotation != currentRotation &&
+		    pieceCanFit(field, currentPiece, currentX, currentY, newRotation))
+		{
+			currentRotation = newRotation;
+		}
+
 		if (shouldForceDownward)
 		{
-			if (pieceDoesFit(field, currentPiece, currentX, currentY + 1, currentRotation))
+			if (pieceCanFit(field, currentPiece, currentX, currentY+1, currentRotation))
 				currentY++;
 			else
 				shouldFixInPlace = true;
@@ -246,18 +252,19 @@ int main()
 			// Check if any lines should be cleared
 			for (int y = 0; y < sideLength; y++)
 			{
+				const int screenRow = currentY + y;
 				// Stop if going outside the boundaries
-				if (currentY + y >= FIELD_HEIGHT - 1)
+				if (screenRow >= FIELD_HEIGHT - 1)
 					break;
 
 				// Begin with the assumption that the line is full of blocks
 				bool lineIsFull {true};
-				const int fieldYOffset = (currentY + y) * FIELD_WIDTH;
+				const int fieldRow = screenRow * FIELD_WIDTH;
 
 				// Check whether there are any empty spaces in the line
 				for (int x = 1; x < FIELD_WIDTH - 1; x++)
 				{
-					const int fieldIndex = fieldYOffset + x;
+					const int fieldIndex = fieldRow + x;
 					if (field.at(fieldIndex) == ' ')
 					{
 						lineIsFull = false;
@@ -270,12 +277,12 @@ int main()
 					// Rewrite all the characters with '='
 					for (int x = 1; x < FIELD_WIDTH - 1; x++)
 					{
-						const int fieldIndex = fieldYOffset + x;
+						const int fieldIndex = fieldRow + x;
 						field.at(fieldIndex) = '=';
 					}
 
 					// Save the location of this line so it can be cleared later
-					lowestLineToClear = y + currentY;
+					lowestLineToClear = screenRow;
 					numLinesToClear++;
 				}
 			}
@@ -345,7 +352,8 @@ int main()
 			drawField(field, score, totalNumLinesCleared, level);
 		}
  
-		// Wait if necessary to maintain 60 fps
+		numTicks++;
+		// Wait if necessary to maintain roughly 60 loops per second
 		const auto timeEnd = std::chrono::system_clock::now();
 		const auto usElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
 		if (usElapsed < usPerFrame)
@@ -365,10 +373,10 @@ void drawField(std::array<char, FIELD_LENGTH> & field, const int score,
 
 	for (int y = 0; y < FIELD_HEIGHT; y++)
 	{
-		const int yOffset = y * FIELD_WIDTH;
+		const int fieldRow = y * FIELD_WIDTH;
 		for (int x = 0; x < FIELD_WIDTH; x++)
 		{
-			const int fieldIndex = yOffset + x;
+			const int fieldIndex = fieldRow + x;
 			const char charSprite = field.at(fieldIndex);
 			mvaddch(y, x, charSprite);
 		}
@@ -461,7 +469,7 @@ void drawPiece(const std::string & piece,
 
 	refresh();
 }
-			
+
 
 int getPieceIndexForRotation(const std::string & piece,
                              const int x, const int y,
@@ -544,27 +552,29 @@ int getPieceIndexForRotation(const std::string & piece,
 }
 
 
-bool pieceDoesFit(const std::array<char, FIELD_LENGTH> field,
-                  const std::string & piece,
-                  const int pieceX, const int pieceY,
-                  const int rotation)
+bool pieceCanFit(const std::array<char, FIELD_LENGTH> & field,
+                 const std::string & piece,
+                 const int pieceX, const int pieceY,
+                 const int rotation)
 {
 	const int sideLength = getSideLength(piece.length());
 
 	for (int y = 0; y < sideLength; y++)
 	{
-		const int fieldYOffset = (pieceY + y) * FIELD_WIDTH;
+		const int screenRow = pieceY + y;
+		const int fieldRow = screenRow * FIELD_WIDTH;
 		for (int x = 0; x < sideLength; x++)
 		{
 			const int pieceIndex = getPieceIndexForRotation(piece, x, y, rotation);
 			if (piece.at(pieceIndex) != ' ')
 			{
-				const bool isOutsideField = pieceX + x < 1 ||
-					pieceX + x >= FIELD_WIDTH ||
-					pieceY + y >= FIELD_HEIGHT;
-				const int fieldIndex = fieldYOffset + (pieceX + x);
-				if (isOutsideField || field.at(fieldIndex) != ' ')
+				const int screenCol = pieceX + x;
+				if (screenCol < 1 || screenCol >= FIELD_WIDTH ||
+				    screenRow >= FIELD_HEIGHT ||
+				    field.at(fieldRow + screenCol) != ' ')
+				{
 					return false;
+				}
 			}
 		}
 	}
