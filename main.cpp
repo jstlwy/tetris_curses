@@ -294,17 +294,31 @@ int main()
 		if (!shouldFixInPlace)
 		{
 			drawPiece(currentPiece, currentX, currentY, currentRotation);
+			continue;
 		}
+
+		// Wait for a short duration to allow the player
+		// to see the blocks disappearing
+		std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+		// Keep track of player progress
+		numLinesCleared += numLinesToClear;
 
 		// If there are any lines that need to disappear,
 		// alter the field map array and redraw the field
-		if (numLinesToClear > 0)
+		while (numLinesToClear > 0)
 		{
-			// Wait for a short duration to allow the player
-			// to see the blocks disappearing
-			std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-			const int oldYOffset = numLinesToClear * FIELD_WIDTH;
+			// Get number of lines to move down
+			int numFullContiguousLines {1};
+			const int charAboveIndex = ((lowestLineToClear - 1) * FIELD_WIDTH) + 1;
+			for (int i = charAboveIndex; field.at(i) == '='; i -= FIELD_WIDTH)
+			{
+				numFullContiguousLines++;
+			}
+			
+			// This offset designates where in the field array
+			// the old elements that must be moved down exist
+			const int oldYOffset = numFullContiguousLines * FIELD_WIDTH;
 
 			// Move everything in the field array down
 			for (int y = lowestLineToClear; y >= 0; y--)
@@ -313,7 +327,7 @@ int main()
 				for (int x = 1; x < FIELD_WIDTH - 1; x++)
 				{
 					const int newFieldIndex = fieldYOffset + x;
-					if (y <= numLinesToClear)
+					if (y <= numFullContiguousLines)
 					{
 						field.at(newFieldIndex) = ' ';
 					}
@@ -325,11 +339,21 @@ int main()
 				}
 			}
 
-			drawField(field);
-
-			// Keep track of player progress
-			numLinesCleared += numLinesToClear;
+			numLinesToClear -= numFullContiguousLines;
+			if (numLinesToClear > 0)
+			{
+				// Find the next line that needs to be cleared
+				int fieldIndex;
+				do
+				{
+					lowestLineToClear--;
+					fieldIndex = (lowestLineToClear * FIELD_WIDTH) + 1;
+				}
+				while (field.at(fieldIndex) != '=');
+			}
 		}
+
+		drawField(field);
 	}
 
 	endwin();
