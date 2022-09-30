@@ -1,4 +1,5 @@
 #include <ncurses.h>
+#include <iostream>
 #include <time.h>
 #include <string>
 #include <array>
@@ -11,7 +12,12 @@ constexpr int FIELD_HEIGHT {18};
 constexpr int FIELD_LENGTH {FIELD_WIDTH * FIELD_HEIGHT};
 constexpr int NUM_TETROMINOES {7};
 
-void drawField(std::array<char, FIELD_LENGTH> & field);
+void drawField(std::array<char, FIELD_LENGTH> & field, const int score,
+               const int lines, const int level);
+
+void clearLinesFromField(std::array<char, FIELD_LENGTH> & field,
+                         int numLinesToClear,
+                         int lowestLineToClear);
 
 void drawPiece(const std::string & piece,
                const int currentX, const int currentY,
@@ -118,7 +124,10 @@ int main()
 	}
 	shuffleArray(pieceBag, randomEngine);
 
+	// --------------------
 	// Game state variables
+	// --------------------
+	
 	int currentBagIndex {0};
 	int currentPieceNum {pieceBag.at(currentBagIndex)};
 	std::string currentPiece {tetromino.at(currentPieceNum)};
@@ -126,31 +135,32 @@ int main()
 	int currentX {4};
 	int currentY {1};
 
-	int numTicks {0};
-	int maxTicksPerLine {20};
-	int speed {20};
-
 	bool shouldForceDownward {false};
-	bool shouldStopRotation {true};
 
-	int numLinesCleared {0};
-	int score {0};
+	unsigned int totalNumLinesCleared {0};
+	unsigned int score {0};
+	unsigned int level {0};
+	unsigned int tenLineCounter {0};
+
+	// Timing
+	int numTicks {0};
+	int maxTicksPerLine {48};
+	const auto usPerFrame {std::chrono::microseconds(16667)};
 	
 	// Ensure game begins with the screen drawn
-	drawField(field);
+	drawField(field, score, totalNumLinesCleared, level);
 
 	bool gameOver {false};
 	while (!gameOver)
 	{
 		// Manage game timing
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		const auto timeStart = std::chrono::system_clock::now();
 		numTicks++;
 		shouldForceDownward = (numTicks >= maxTicksPerLine);
 
 		// Process input
 		const int keyInput = getch();
 		int newRotation {currentRotation};
-		shouldStopRotation = true;
 		bool shouldFixInPlace {false};
 		switch (keyInput)
 		{
@@ -187,20 +197,17 @@ int main()
 				newRotation = (currentRotation == 3) ? 0 : currentRotation + 1;
 			}
 			currentRotation = pieceDoesFit(field, currentPiece, currentX, currentY, newRotation) ? newRotation : currentRotation;
-			shouldStopRotation = false;
+			break;
+		default:
 			break;
 		}
 
 		if (shouldForceDownward)
 		{
 			if (pieceDoesFit(field, currentPiece, currentX, currentY + 1, currentRotation))
-			{
 				currentY++;
-			}
 			else
-			{
 				shouldFixInPlace = true;
-			}
 			numTicks = 0;
 			shouldForceDownward = false;
 		}
@@ -208,162 +215,154 @@ int main()
 		int numLinesToClear {0};
 		int lowestLineToClear {0};
 
-		if (shouldFixInPlace)
+		if (!shouldFixInPlace)
 		{
-			if (currentY <= 1)
+			drawField(field, score, totalNumLinesCleared, level);
+			drawPiece(currentPiece, currentX, currentY, currentRotation);
+		}
+		else if (currentY <= 1)
+		{
+			gameOver = true;
+		}
+		else
+		{
+			// Add piece to field map
+			const int sideLength = getSideLength(currentPiece.length());
+			for (int y = 0; y < sideLength; y++)
 			{
-				gameOver = true;
-			}
-			else
-			{
-				// Add piece to field map
-				const int sideLength = getSideLength(currentPiece.length());
-				for (int y = 0; y < sideLength; y++)
+				const int fieldYOffset = (currentY + y) * FIELD_WIDTH;
+				for (int x = 0; x < sideLength; x++)
 				{
-					const int fieldYOffset = (currentY + y) * FIELD_WIDTH;
-					for (int x = 0; x < sideLength; x++)
+					const int pieceIndex = getPieceIndexForRotation(currentPiece, x, y, currentRotation);
+					const char charSprite = currentPiece.at(pieceIndex);
+					if (charSprite != ' ')
 					{
-						const int pieceIndex = getPieceIndexForRotation(currentPiece, x, y, currentRotation);
-						const char charSprite = currentPiece.at(pieceIndex);
-						if (charSprite != ' ')
-						{
-							const int fieldIndex = fieldYOffset + (x + currentX);
-							field.at(fieldIndex) = charSprite;
-						}
+						const int fieldIndex = fieldYOffset + (x + currentX);
+						field.at(fieldIndex) = charSprite;
+					}
+				}
+			}
+
+			// Check if any lines should be cleared
+			for (int y = 0; y < sideLength; y++)
+			{
+				// Stop if going outside the boundaries
+				if (currentY + y >= FIELD_HEIGHT - 1)
+					break;
+
+				// Begin with the assumption that the line is full of blocks
+				bool lineIsFull {true};
+				const int fieldYOffset = (currentY + y) * FIELD_WIDTH;
+
+				// Check whether there are any empty spaces in the line
+				for (int x = 1; x < FIELD_WIDTH - 1; x++)
+				{
+					const int fieldIndex = fieldYOffset + x;
+					if (field.at(fieldIndex) == ' ')
+					{
+						lineIsFull = false;
+						break;
 					}
 				}
 
-				// Check if any lines should be cleared
-				for (int y = 0; y < sideLength; y++)
+				if (lineIsFull)
 				{
-					// Stop if going outside the boundaries
-					if (currentY + y >= FIELD_HEIGHT - 1)
-					{
-						break;
-					}
-
-					// Begin with the assumption that the line is full of blocks
-					bool lineIsFull {true};
-					const int fieldYOffset = (currentY + y) * FIELD_WIDTH;
-
-					// Check whether there are any empty spaces in the line
+					// Rewrite all the characters with '='
 					for (int x = 1; x < FIELD_WIDTH - 1; x++)
 					{
 						const int fieldIndex = fieldYOffset + x;
-						if (field.at(fieldIndex) == ' ')
-						{
-							lineIsFull = false;
-							break;
-						}
+						field.at(fieldIndex) = '=';
 					}
 
-					if (lineIsFull)
-					{
-						// Rewrite all the characters with '='
-						for (int x = 1; x < FIELD_WIDTH - 1; x++)
-						{
-							const int fieldIndex = fieldYOffset + x;
-							field.at(fieldIndex) = '=';
-						}
-
-						// Save the location of this line so it can be cleared later
-						lowestLineToClear = y + currentY;
-						numLinesToClear++;
-					}
+					// Save the location of this line so it can be cleared later
+					lowestLineToClear = y + currentY;
+					numLinesToClear++;
 				}
-
-				// Update game state
-				currentBagIndex++;
-				if (currentBagIndex >= pieceBag.size())
-				{
-					currentBagIndex = 0;
-					shuffleArray(pieceBag, randomEngine);
-				}
-				currentPieceNum = pieceBag.at(currentBagIndex);
-				currentPiece = tetromino.at(currentPieceNum);
-				currentRotation = 0;
-				currentX = 4;
-				currentY = 1;
 			}
+
+			// Update field
+			drawField(field, score, totalNumLinesCleared, level);
+
+			// Update game state
+			currentBagIndex++;
+			if (currentBagIndex >= pieceBag.size())
+			{
+				currentBagIndex = 0;
+				shuffleArray(pieceBag, randomEngine);
+			}
+			currentPieceNum = pieceBag.at(currentBagIndex);
+			currentPiece = tetromino.at(currentPieceNum);
+			currentRotation = 0;
+			currentX = 4;
+			currentY = 1;
 		}
 
-		// Draw screen
-		drawField(field);
-
-		// Draw any floating pieces
-		if (!shouldFixInPlace)
+		if (numLinesToClear > 0)
 		{
-			drawPiece(currentPiece, currentX, currentY, currentRotation);
-			continue;
+			// Must draw the screen once again
+			// to show the lines disappearing.
+
+			// First, wait for a short duration
+			// so the player can see the effect.
+			std::this_thread::sleep_for(std::chrono::milliseconds(600));
+
+			// Keep track of player progress
+			totalNumLinesCleared += numLinesToClear;
+
+			// Scoring system similar to original Nintendo system
+			const int scoringLevel = level + 1;
+			switch (numLinesToClear)
+			{
+			case 1:
+				score += 40 * scoringLevel;
+				break;
+			case 2:
+				score += 100 * scoringLevel;
+				break;
+			case 3:
+				score += 300 * scoringLevel;
+				break;
+			case 4:
+				score += 1200 * scoringLevel;
+				break;
+			}
+
+			// Check if level should advance
+			tenLineCounter += numLinesToClear;
+			if (tenLineCounter >= 10)
+			{
+				level++;
+				tenLineCounter -= 10;
+				
+				// Adjust timing
+				if (level > 8)
+					maxTicksPerLine -= 5;
+				else if (level > 1)
+					maxTicksPerLine--;
+			}
+
+			clearLinesFromField(field, numLinesToClear, lowestLineToClear);
+			drawField(field, score, totalNumLinesCleared, level);
 		}
-
-		// Wait for a short duration to allow the player
-		// to see the blocks disappearing
-		std::this_thread::sleep_for(std::chrono::milliseconds(300));
-
-		// Keep track of player progress
-		numLinesCleared += numLinesToClear;
-
-		// If there are any lines that need to disappear,
-		// alter the field map array and redraw the field
-		while (numLinesToClear > 0)
-		{
-			// Get number of lines to move down
-			int numFullContiguousLines {1};
-			const int charAboveIndex = ((lowestLineToClear - 1) * FIELD_WIDTH) + 1;
-			for (int i = charAboveIndex; field.at(i) == '='; i -= FIELD_WIDTH)
-			{
-				numFullContiguousLines++;
-			}
-			
-			// This offset designates where in the field array
-			// the old elements that must be moved down exist
-			const int oldYOffset = numFullContiguousLines * FIELD_WIDTH;
-
-			// Move everything in the field array down
-			for (int y = lowestLineToClear; y >= 0; y--)
-			{
-				const int fieldYOffset = y * FIELD_WIDTH;
-				for (int x = 1; x < FIELD_WIDTH - 1; x++)
-				{
-					const int newFieldIndex = fieldYOffset + x;
-					if (y <= numFullContiguousLines)
-					{
-						field.at(newFieldIndex) = ' ';
-					}
-					else
-					{
-						const int oldFieldIndex = newFieldIndex - oldYOffset;
-						field.at(newFieldIndex) = field.at(oldFieldIndex);
-					}
-				}
-			}
-
-			numLinesToClear -= numFullContiguousLines;
-			if (numLinesToClear > 0)
-			{
-				// Find the next line that needs to be cleared
-				int fieldIndex;
-				do
-				{
-					lowestLineToClear--;
-					fieldIndex = (lowestLineToClear * FIELD_WIDTH) + 1;
-				}
-				while (field.at(fieldIndex) != '=');
-			}
-		}
-
-		drawField(field);
+ 
+		// Wait if necessary to maintain 60 fps
+		const auto timeEnd = std::chrono::system_clock::now();
+		const auto usElapsed = std::chrono::duration_cast<std::chrono::microseconds>(timeEnd - timeStart);
+		if (usElapsed < usPerFrame)
+			std::this_thread::sleep_for(usPerFrame - usElapsed);
 	}
 
 	endwin();
+	std::cout << "Final score: " << score << "\n";
 	return 0;
 }
 
 
-void drawField(std::array<char, FIELD_LENGTH> & field)
+void drawField(std::array<char, FIELD_LENGTH> & field, const int score,
+               const int lines, const int level)
 {
 	clear();
+
 	for (int y = 0; y < FIELD_HEIGHT; y++)
 	{
 		const int yOffset = y * FIELD_WIDTH;
@@ -374,7 +373,68 @@ void drawField(std::array<char, FIELD_LENGTH> & field)
 			mvaddch(y, x, charSprite);
 		}
 	}
+
+	mvprintw(1, FIELD_WIDTH + 2, "SCORE:");
+	mvprintw(2, FIELD_WIDTH + 2, "%d", score);
+	mvprintw(4, FIELD_WIDTH + 2, "LINES:");
+	mvprintw(5, FIELD_WIDTH + 2, "%d", lines);
+	mvprintw(7, FIELD_WIDTH + 2, "LEVEL:");
+	mvprintw(8, FIELD_WIDTH + 2, "%d", level);
+
 	refresh();
+}
+
+
+void clearLinesFromField(std::array<char, FIELD_LENGTH> & field,
+                         int numLinesToClear,
+                         int lowestLineToClear)
+{
+	while (numLinesToClear > 0)
+	{
+		// Get number of lines to move down
+		int numFullContiguousLines {1};
+		const int charAboveIndex = ((lowestLineToClear - 1) * FIELD_WIDTH) + 1;
+		for (int i = charAboveIndex; field.at(i) == '='; i -= FIELD_WIDTH)
+		{
+			numFullContiguousLines++;
+		}
+		
+		// This offset designates how far away in the field array
+		// the old elements that must be moved down/ahead are
+		const int oldYOffset = numFullContiguousLines * FIELD_WIDTH;
+
+		// Move everything in the field array down
+		for (int y = lowestLineToClear; y >= 0; y--)
+		{
+			const int fieldYOffset = y * FIELD_WIDTH;
+			for (int x = 1; x < FIELD_WIDTH - 1; x++)
+			{
+				const int newFieldIndex = fieldYOffset + x;
+				if (y <= numFullContiguousLines)
+				{
+					field.at(newFieldIndex) = ' ';
+				}
+				else
+				{
+					const int oldFieldIndex = newFieldIndex - oldYOffset;
+					field.at(newFieldIndex) = field.at(oldFieldIndex);
+				}
+			}
+		}
+
+		numLinesToClear -= numFullContiguousLines;
+		if (numLinesToClear > 0)
+		{
+			// Find the next line that needs to be cleared
+			int fieldIndex;
+			do
+			{
+				lowestLineToClear--;
+				fieldIndex = (lowestLineToClear * FIELD_WIDTH) + 1;
+			}
+			while (field.at(fieldIndex) != '=');
+		}
+	}
 }
 
 
@@ -499,12 +559,12 @@ bool pieceDoesFit(const std::array<char, FIELD_LENGTH> field,
 			const int pieceIndex = getPieceIndexForRotation(piece, x, y, rotation);
 			if (piece.at(pieceIndex) != ' ')
 			{
-				const bool isOutsideField = (pieceX + x < 1 || pieceX + x >= FIELD_WIDTH || pieceY + y >= FIELD_HEIGHT);
+				const bool isOutsideField = pieceX + x < 1 ||
+					pieceX + x >= FIELD_WIDTH ||
+					pieceY + y >= FIELD_HEIGHT;
 				const int fieldIndex = fieldYOffset + (pieceX + x);
 				if (isOutsideField || field.at(fieldIndex) != ' ')
-				{
 					return false;
-				}
 			}
 		}
 	}
@@ -545,3 +605,4 @@ void shuffleArray(std::array<int, NUM_TETROMINOES> & bag,
 		bag.at(j) = temp;
 	}
 }
+
