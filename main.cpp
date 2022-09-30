@@ -333,11 +333,11 @@ int main()
 			{
 				level++;
 				tenLineCounter -= 10;
-				
+
 				// Adjust timing
-				if (level > 8)
+				if (level < 8 && maxTicksPerLine > 5)
 					maxTicksPerLine -= 5;
-				else if (level > 1)
+				else if (maxTicksPerLine > 1)
 					maxTicksPerLine--;
 			}
 
