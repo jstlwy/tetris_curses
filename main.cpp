@@ -11,11 +11,25 @@ constexpr int FIELD_WIDTH {12};
 constexpr int FIELD_HEIGHT {18};
 constexpr int FIELD_LENGTH {FIELD_WIDTH * FIELD_HEIGHT};
 
-std::array<std::string, 7> tetrominoes;
-std::array<int, 7> tetrominoSideLengths;
+// ----------------
+// Piece "sprites"
+// ----------------
+// Based on the Super Rotation System:
+// https://tetris.fandom.com/wiki/SRS
+const std::array<std::string, 7> tetrominoes = {
+	"    IIII        ",
+	"ZZ  ZZ   ",
+	" SSSS    ",
+	"OOOO",
+	" T TTT   ",
+	"  LLLL   ",
+	"J  JJJ   "
+};
+const std::array<int, 7> tetrominoSideLengths = {4, 3, 3, 2, 3, 3, 3};
 
-void drawField(std::array<char, FIELD_LENGTH> & field, const int score,
-	const int lines, const int level);
+void drawField(const std::array<char, FIELD_LENGTH> & field);
+
+void drawHUD(const int score, const int numLinesCleared, const int level);
 
 void clearLinesFromField(std::array<char, FIELD_LENGTH> & field,
 	int numLinesToClear, int lowestLineToClear);
@@ -34,55 +48,6 @@ void shuffleArray(std::array<int, 7> & bag, std::default_random_engine & re);
 
 int main()
 {
-	// -------------------------
-	// Initialize piece shapes
-	// -------------------------
-	
-	// Basing the strings on the Super Rotation System:
-	// https://tetris.fandom.com/wiki/SRS
-	
-	// I
-	tetrominoes[0].append("    ");
-	tetrominoes[0].append("IIII");
-	tetrominoes[0].append("    ");
-	tetrominoes[0].append("    ");
-	tetrominoSideLengths[0] = 4;
-
-	// Z
-	tetrominoes[1].append("ZZ ");
-	tetrominoes[1].append(" ZZ");
-	tetrominoes[1].append("   ");
-	tetrominoSideLengths[1] = 3;
-
-	// S
-	tetrominoes[2].append(" SS");
-	tetrominoes[2].append("SS ");
-	tetrominoes[2].append("   ");
-	tetrominoSideLengths[2] = 3;
-
-	// O
-	tetrominoes[3].append("OO");
-	tetrominoes[3].append("OO");
-	tetrominoSideLengths[3] = 2;
-
-	// T
-	tetrominoes[4].append(" T ");
-	tetrominoes[4].append("TTT");
-	tetrominoes[4].append("   ");
-	tetrominoSideLengths[4] = 3;
-
-	// L
-	tetrominoes[5].append("  L");
-	tetrominoes[5].append("LLL");
-	tetrominoes[5].append("   ");
-	tetrominoSideLengths[5] = 3;
-
-	// J
-	tetrominoes[6].append("J  ");
-	tetrominoes[6].append("JJJ");
-	tetrominoes[6].append("   ");
-	tetrominoSideLengths[6] = 3;
-
 	// -------------------------
 	// Initialize field map
 	// -------------------------
@@ -149,7 +114,8 @@ int main()
 	const auto usPerFrame {std::chrono::microseconds(16667)};
 	
 	// Ensure game begins with the screen drawn
-	drawField(field, score, totalNumLinesCleared, level);
+	drawField(field);
+	drawHUD(score, totalNumLinesCleared, level);
 
 	bool gameOver {false};
 	while (!gameOver)
@@ -221,7 +187,7 @@ int main()
 
 		if (!shouldFixInPlace)
 		{
-			drawField(field, score, totalNumLinesCleared, level);
+			drawField(field);
 			drawPiece(currentPiece, currentSideLength, currentX, currentY, currentRotation);
 		}
 		else if (currentY <= 1)
@@ -285,7 +251,8 @@ int main()
 			}
 
 			// Update field
-			drawField(field, score, totalNumLinesCleared, level);
+			drawField(field);
+			//drawField(field, score, totalNumLinesCleared, level);
 
 			// Update game state
 			currentBagIndex++;
@@ -347,7 +314,8 @@ int main()
 			}
 
 			clearLinesFromField(field, numLinesToClear, lowestLineToClear);
-			drawField(field, score, totalNumLinesCleared, level);
+			drawField(field);
+			drawHUD(score, totalNumLinesCleared, level);
 		}
  
 		numTicks++;
@@ -364,11 +332,8 @@ int main()
 }
 
 
-void drawField(std::array<char, FIELD_LENGTH> & field, const int score,
-	const int lines, const int level)
+void drawField(const std::array<char, FIELD_LENGTH> & field)
 {
-	clear();
-
 	for (int y = 0; y < FIELD_HEIGHT; y++)
 	{
 		const int fieldRow = y * FIELD_WIDTH;
@@ -379,14 +344,18 @@ void drawField(std::array<char, FIELD_LENGTH> & field, const int score,
 			mvaddch(y, x, charSprite);
 		}
 	}
+	refresh();
+}
 
+
+void drawHUD(const int score, const int numLinesCleared, const int level)
+{
 	mvprintw(1, FIELD_WIDTH + 2, "SCORE:");
 	mvprintw(2, FIELD_WIDTH + 2, "%d", score);
 	mvprintw(4, FIELD_WIDTH + 2, "LINES:");
-	mvprintw(5, FIELD_WIDTH + 2, "%d", lines);
+	mvprintw(5, FIELD_WIDTH + 2, "%d", numLinesCleared);
 	mvprintw(7, FIELD_WIDTH + 2, "LEVEL:");
 	mvprintw(8, FIELD_WIDTH + 2, "%d", level);
-
 	refresh();
 }
 
