@@ -11,22 +11,6 @@ constexpr int FIELD_WIDTH {12};
 constexpr int FIELD_HEIGHT {18};
 constexpr int FIELD_LENGTH {FIELD_WIDTH * FIELD_HEIGHT};
 
-// ----------------
-// Piece "sprites"
-// ----------------
-// Based on the Super Rotation System:
-// https://tetris.fandom.com/wiki/SRS
-const std::array<std::string, 7> tetrominoes = {
-	"    IIII        ",
-	"ZZ  ZZ   ",
-	" SSSS    ",
-	"OOOO",
-	" T TTT   ",
-	"  LLLL   ",
-	"J  JJJ   "
-};
-const std::array<int, 7> tetrominoSideLengths = {4, 3, 3, 2, 3, 3, 3};
-
 void drawField(const std::array<char, FIELD_LENGTH> & field);
 
 void drawHUD(const int score, const int numLinesCleared, const int level);
@@ -48,6 +32,22 @@ void shuffleArray(std::array<int, 7> & bag, std::default_random_engine & re);
 
 int main()
 {
+	// ----------------
+	// Piece "sprites"
+	// ----------------
+	// Based on the Super Rotation System:
+	// https://tetris.fandom.com/wiki/SRS
+	const std::array<std::string, 7> tetrominoes = {
+		"    IIII        ",
+		"ZZ  ZZ   ",
+		" SSSS    ",
+		"OOOO",
+		" T TTT   ",
+		"  LLLL   ",
+		"J  JJJ   "
+	};
+	const std::array<int, 7> tetrominoSideLengths = {4, 3, 3, 2, 3, 3, 3};
+
 	// -------------------------
 	// Initialize field map
 	// -------------------------
