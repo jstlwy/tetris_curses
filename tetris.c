@@ -9,8 +9,8 @@ int const FIELD_HEIGHT = 18;
 int const FIELD_LENGTH = FIELD_WIDTH * FIELD_HEIGHT;
 
 struct tetromino {
-	int length;
-	int sideLength;
+	//int len;
+	int sidelen;
 	int x;
 	int y;
 	int rot;
@@ -96,7 +96,7 @@ int main(void)
 		"  LLLL   ",
 		"J  JJJ   "
 	};
-	int const tetrominoLengths[7] = {16, 9, 9, 4, 9, 9, 9};
+	//int const tetrominoLengths[7] = {16, 9, 9, 4, 9, 9, 9};
 	int const tetrominoSideLengths[7] = {4, 3, 3, 2, 3, 3, 3};
 
 	// -------------------------
@@ -131,7 +131,7 @@ int main(void)
 	// Make cursor invisible
 	curs_set(0);
 
-	// Initialize the array to hold tetromino sequence
+	// Initialize the array with a random tetromino sequence
 	int pieceBag[7] = {0, 1, 2, 3, 4, 5, 6};
 	shuffleArray(pieceBag);
 
@@ -140,13 +140,14 @@ int main(void)
 	// --------------------
 	int currentBagIndex = 0;
 	int currentPieceNum = pieceBag[currentBagIndex];
-	struct tetromino t;
-	t.length = tetrominoLengths[currentPieceNum];
-	t.sideLength = tetrominoSideLengths[currentPieceNum];
-	t.x = 4;
-	t.y = 1;
-	t.rot = 0;
-	t.sprite = tetrominoes[currentPieceNum];
+	struct tetromino t = {
+		//tetrominoLengths[currentPieceNum],
+		tetrominoSideLengths[currentPieceNum],
+		4,
+		1,
+		0,
+		tetrominoes[currentPieceNum]
+	};
 
 	bool shouldForceDownward = false;
 
@@ -175,7 +176,6 @@ int main(void)
 		// Process input
 		int const keyInput = getch();
 		int newRotation = t.rot;
-		bool shouldFixInPlace = false;
 		switch (keyInput)
 		{
 		case 'h':
@@ -219,6 +219,7 @@ int main(void)
 				t.rot = currentRotation;
 		}
 
+		bool shouldFixInPlace = false;
 		if (shouldForceDownward)
 		{
 			t.y++;
@@ -246,10 +247,10 @@ int main(void)
 		else
 		{
 			// Add piece to field map
-			for (int y = 0; y < t.sideLength; y++)
+			for (int y = 0; y < t.sidelen; y++)
 			{
 				int const fieldYOffset = (t.y + y) * FIELD_WIDTH;
-				for (int x = 0; x < t.sideLength; x++)
+				for (int x = 0; x < t.sidelen; x++)
 				{
 					int const pieceIndex = getPieceIndexForRotation(&t, x, y);
 					char const charSprite = t.sprite[pieceIndex];
@@ -261,7 +262,7 @@ int main(void)
 			}
 
 			// Check if any lines should be cleared
-			for (int y = 0; y < t.sideLength; y++)
+			for (int y = 0; y < t.sidelen; y++)
 			{
 				int const screenRow = t.y + y;
 				// Stop if going outside the boundaries
@@ -309,8 +310,8 @@ int main(void)
 				shuffleArray(pieceBag);
 			}
 			currentPieceNum = pieceBag[currentBagIndex];
-			t.length = tetrominoLengths[currentPieceNum];
-			t.sideLength = tetrominoSideLengths[currentPieceNum];
+			//t.len = tetrominoLengths[currentPieceNum];
+			t.sidelen = tetrominoSideLengths[currentPieceNum];
 			t.x = 4;
 			t.y = 1;
 			t.rot = 0;
@@ -465,10 +466,10 @@ void clearLinesFromField(char field[FIELD_LENGTH],
 
 void drawPiece(struct tetromino const*const t)
 {
-	for (int y = 0; y < t->sideLength; y++)
+	for (int y = 0; y < t->sidelen; y++)
 	{
 		int const drawY = t->y + y;
-		for (int x = 0; x < t->sideLength; x++)
+		for (int x = 0; x < t->sidelen; x++)
 		{
 			int const pieceIndex = getPieceIndexForRotation(t, x, y);
 			char const charSprite = t->sprite[pieceIndex];
@@ -490,27 +491,27 @@ int getPieceIndexForRotation(struct tetromino const*const t,
 	/*
 	// Old method using arithmetic:
 	// The "O" tetromino's rotation is irrelevant
-	if (t->sideLength < 3)
+	if (t->sidelen < 3)
 		return index;
 	switch (t->rot)
 	{
 	case 0:
-		index = (y * t->sideLength) + x;
+		index = (y * t->sidelen) + x;
 		break;
 	case 1:
-		index = (t->length - t->sideLength) + y - (x * t->sideLength);
+		index = (t->len - t->sidelen) + y - (x * t->sidelen);
 		break;
 	case 2:
-		index = (t->length - 1) - (y * t->sideLength) - x;
+		index = (t->len - 1) - (y * t->sidelen) - x;
 		break;
 	case 3:
-		index = (t->sideLength - 1) - y + (x * t->sideLength);
+		index = (t->sidelen - 1) - y + (x * t->sidelen);
 		break;
 	}
 	*/
 
 	// New method using tables:
-	switch (t->sideLength)
+	switch (t->sidelen)
 	{
 	case 3:
 		index = threeRot[t->rot][y][x];
@@ -528,11 +529,11 @@ int getPieceIndexForRotation(struct tetromino const*const t,
 
 bool pieceCanFit(char field[const FIELD_LENGTH], struct tetromino const*const t)
 {
-	for (int y = 0; y < t->sideLength; y++)
+	for (int y = 0; y < t->sidelen; y++)
 	{
 		int const screenRow = t->y + y;
 		int const fieldRow = screenRow * FIELD_WIDTH;
-		for (int x = 0; x < t->sideLength; x++)
+		for (int x = 0; x < t->sidelen; x++)
 		{
 			int const pieceIndex = getPieceIndexForRotation(t, x, y);
 			if (t->sprite[pieceIndex] == ' ')

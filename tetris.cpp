@@ -5,39 +5,53 @@
 #include <array>
 #include <thread>
 #include <chrono>
+#include <algorithm>
 #include <random>
 
 constexpr int FIELD_WIDTH {12};
 constexpr int FIELD_HEIGHT {18};
 constexpr int FIELD_LENGTH {FIELD_WIDTH * FIELD_HEIGHT};
 
-void drawField(const std::array<char, FIELD_LENGTH> & field);
+class Tetromino {
+public:
+	int tnum {};
+	int x {4};
+	int y {1};
+	int rot {0};
+	int sidelen;
 
-void drawHUD(const int score, const int numLinesCleared, const int level);
+	Tetromino(int tnum)
+		: tnum{tnum}, sprite{tetrominoes.at(tnum)}
+	{
+		sidelen = tetrominoSideLengths.at(tnum);
+	}
 
-void clearLinesFromField(std::array<char, FIELD_LENGTH> & field,
-	int numLinesToClear, int lowestLineToClear);
+	void reset(int tnum)
+	{
+		x = 4;
+		y = 1;
+		rot = 0;
+		sidelen = tetrominoSideLengths.at(tnum);
+		sprite = tetrominoes.at(tnum);
+	}
 
-void drawPiece(const std::string & piece, const int sideLength,
-	const int currentX, const int currentY, const int currentRotation);
+	char getSpriteChar(int i) const
+	{
+		return sprite.at(i);
+	}
 
-int getPieceIndexForRotation(const std::string & piece, const int sideLength,
-	const int x, const int y, const int rotation);
+	char getSpriteLen() const
+	{
+		return sprite.size();
+	}
 
-bool pieceCanFit(const std::array<char, FIELD_LENGTH> & field,
-	const std::string & piece, const int sideLength, const int pieceX,
-	const int pieceY, const int rotation);
+private:
+	std::string sprite;
 
-void shuffleArray(std::array<int, 7> & bag, std::default_random_engine & re);
-
-int main()
-{
-	// ----------------
 	// Piece "sprites"
-	// ----------------
 	// Based on the Super Rotation System:
 	// https://tetris.fandom.com/wiki/SRS
-	const std::array<std::string, 7> tetrominoes = {
+	inline static std::array<std::string, 7> tetrominoes = {
 		"    IIII        ",
 		"ZZ  ZZ   ",
 		" SSSS    ",
@@ -46,8 +60,69 @@ int main()
 		"  LLLL   ",
 		"J  JJJ   "
 	};
-	const std::array<int, 7> tetrominoSideLengths = {4, 3, 3, 2, 3, 3, 3};
+	static constexpr std::array<int, 7> tetrominoSideLengths {{4, 3, 3, 2, 3, 3, 3}};
+};
 
+void drawField(const std::array<char, FIELD_LENGTH>& field);
+
+void drawHUD(const int score, const int numLinesCleared, const int level);
+
+void clearLinesFromField(std::array<char, FIELD_LENGTH>& field,
+	int numLinesToClear, int lowestLineToClear);
+
+void drawPiece(Tetromino& t);
+
+//=================
+// ROTATION TABLES
+//=================
+// For 3x3 shapes:
+std::array<std::array<std::array<int, 3>, 3>, 4> threeRot {{
+	// 0 degrees:
+	{{ {{0, 1, 2}},
+	   {{3, 4, 5}},
+	   {{6, 7, 8}} }},
+	// 90 degrees:
+	{{ {{6, 3, 0}},
+	   {{7, 4, 1}},
+	   {{8, 5, 2}} }},
+	// 180 degrees:
+	{{ {{8, 7, 6}},
+	   {{5, 4, 3}},
+	   {{2, 1, 0}} }},
+	// 270 degrees:
+	{{ {{2, 5, 8}},
+	   {{1, 4, 7}},
+	   {{0, 3, 6}} }}
+}};
+// For 4x4 shapes:
+const std::array<std::array<std::array<int, 4>, 4>, 4> fourRot {{
+	// 0 degrees:
+	{{ {{ 0,  1,  2,  3}},
+	   {{ 4,  5,  6,  7}},
+	   {{ 8,  9, 10, 11}},
+	   {{12, 13, 14, 15}} }},
+	// 90 degrees:
+	{{ {{12,  8,  4,  0}},
+	   {{13,  9,  5,  1}},
+	   {{14, 10,  6,  2}},
+	   {{15, 11,  7,  3}} }},
+	// 180 degrees:
+	{{ {{15, 14, 13, 12}},
+	   {{11, 10,  9,  8}},
+	   {{ 7,  6,  5,  4}},
+	   {{ 3,  2,  1,  0}} }},
+	// 270 degrees:
+	{{ {{ 3,  7, 11, 15}},
+	   {{ 2,  6, 10, 14}},
+	   {{ 1,  5,  9, 13}},
+	   {{ 0,  4,  8, 12}} }}
+}};
+int getPieceIndexForRotation(Tetromino& t, int const x, int const y);
+
+bool pieceCanFit(const std::array<char, FIELD_LENGTH>& field, Tetromino& t);
+
+int main()
+{
 	// -------------------------
 	// Initialize field map
 	// -------------------------
@@ -68,7 +143,6 @@ int main()
 	// -------------------------
 	// Initialize ncurses screen
 	// -------------------------
-
 	initscr();
 	// Make user-typed characters immediately available
 	cbreak();
@@ -87,19 +161,14 @@ int main()
 
 	// Initialize the array to hold tetromino sequence
 	std::array<int, 7> pieceBag = {0, 1, 2, 3, 4, 5, 6};
-	shuffleArray(pieceBag, randomEngine);
+	std::shuffle(pieceBag.begin(), pieceBag.end(), randomEngine);
 
 	// --------------------
 	// Game state variables
 	// --------------------
-	
 	int currentBagIndex {0};
 	int currentPieceNum {pieceBag.at(currentBagIndex)};
-	std::string currentPiece {tetrominoes.at(currentPieceNum)};
-	int currentSideLength {tetrominoSideLengths.at(currentPieceNum)};
-	int currentRotation {0};
-	int currentX {4};
-	int currentY {1};
+	Tetromino t = Tetromino{currentPieceNum};
 
 	bool shouldForceDownward {false};
 
@@ -125,21 +194,22 @@ int main()
 
 		// Process input
 		const int keyInput = getch();
-		int newRotation {currentRotation};
-		bool shouldFixInPlace {false};
+		int newRotation {t.rot};
 		switch (keyInput)
 		{
 		case 'h':
 		case 'H':
 		case KEY_LEFT:
-			if (pieceCanFit(field, currentPiece, currentSideLength, currentX-1, currentY, currentRotation))
-				currentX--;
+			t.x--;
+			if (!pieceCanFit(field, t))
+				t.x++;
 			break;
 		case 'l':
 		case 'L':
 		case KEY_RIGHT:
-			if (pieceCanFit(field, currentPiece, currentSideLength, currentX+1, currentY, currentRotation))
-				currentX++;
+			t.x++;
+			if (!pieceCanFit(field, t))
+				t.x--;
 			break;
 		case 'j':
 		case 'J':
@@ -149,35 +219,34 @@ int main()
 		case 'a':
 		case 'A':
 			// Rotate 90 degrees counterclockwise
-			if (newRotation == 0)
-				newRotation = 3;
-			else
-				newRotation--;
+			newRotation = (newRotation == 0) ? 3 : newRotation - 1;
 			break;
 		case 's':
 		case 'S':
 			// Rotate 90 degrees clockwise
-			if (newRotation == 3)
-				newRotation = 0;
-			else
-				newRotation++;
+			newRotation = (newRotation == 3) ? 0 : newRotation + 1;
 			break;
 		default:
 			break;
 		}
 
-		if (newRotation != currentRotation &&
-		    pieceCanFit(field, currentPiece, currentSideLength, currentX, currentY, newRotation))
+		if (newRotation != t.rot)
 		{
-			currentRotation = newRotation;
+			const int currentRotation = t.rot;
+			t.rot = newRotation;
+			if (!pieceCanFit(field, t))
+				t.rot = currentRotation;
 		}
 
+		bool shouldFixInPlace {false};
 		if (shouldForceDownward)
 		{
-			if (pieceCanFit(field, currentPiece, currentSideLength, currentX, currentY+1, currentRotation))
-				currentY++;
-			else
+			t.y++;
+			if (!pieceCanFit(field, t))
+			{
+				t.y--;
 				shouldFixInPlace = true;
+			}
 			numTicks = 0;
 			shouldForceDownward = false;
 		}
@@ -188,34 +257,33 @@ int main()
 		if (!shouldFixInPlace)
 		{
 			drawField(field);
-			drawPiece(currentPiece, currentSideLength, currentX, currentY, currentRotation);
+			drawPiece(t);
 		}
-		else if (currentY <= 1)
+		else if (t.y <= 1)
 		{
 			gameOver = true;
 		}
 		else
 		{
 			// Add piece to field map
-			for (int y = 0; y < currentSideLength; y++)
+			for (int y = 0; y < t.sidelen; y++)
 			{
-				const int fieldYOffset = (currentY + y) * FIELD_WIDTH;
-				for (int x = 0; x < currentSideLength; x++)
+				const int fieldYOffset = (t.y + y) * FIELD_WIDTH;
+				for (int x = 0; x < t.sidelen; x++)
 				{
-					const int pieceIndex = getPieceIndexForRotation(currentPiece, currentSideLength, x, y, currentRotation);
-					const char charSprite = currentPiece.at(pieceIndex);
-					if (charSprite != ' ')
-					{
-						const int fieldIndex = fieldYOffset + (x + currentX);
-						field.at(fieldIndex) = charSprite;
-					}
+					const int pieceIndex = getPieceIndexForRotation(t, x, y);
+					const char charSprite = t.getSpriteChar(pieceIndex);
+					if (charSprite == ' ')
+						continue;
+					const int fieldIndex = fieldYOffset + (t.x + x);
+					field.at(fieldIndex) = charSprite;
 				}
 			}
 
 			// Check if any lines should be cleared
-			for (int y = 0; y < currentSideLength; y++)
+			for (int y = 0; y < t.sidelen; y++)
 			{
-				const int screenRow = currentY + y;
+				const int screenRow = t.y + y;
 				// Stop if going outside the boundaries
 				if (screenRow >= FIELD_HEIGHT - 1)
 					break;
@@ -252,21 +320,16 @@ int main()
 
 			// Update field
 			drawField(field);
-			//drawField(field, score, totalNumLinesCleared, level);
 
 			// Update game state
 			currentBagIndex++;
 			if (currentBagIndex >= pieceBag.size())
 			{
 				currentBagIndex = 0;
-				shuffleArray(pieceBag, randomEngine);
+				std::shuffle(pieceBag.begin(), pieceBag.end(), randomEngine);
 			}
 			currentPieceNum = pieceBag.at(currentBagIndex);
-			currentPiece = tetrominoes.at(currentPieceNum);
-			currentSideLength = tetrominoSideLengths.at(currentPieceNum);
-			currentRotation = 0;
-			currentX = 4;
-			currentY = 1;
+			t.reset(currentPieceNum);
 		}
 
 		if (numLinesToClear > 0)
@@ -332,7 +395,7 @@ int main()
 }
 
 
-void drawField(const std::array<char, FIELD_LENGTH> & field)
+void drawField(const std::array<char, FIELD_LENGTH>& field)
 {
 	for (int y = 0; y < FIELD_HEIGHT; y++)
 	{
@@ -360,7 +423,7 @@ void drawHUD(const int score, const int numLinesCleared, const int level)
 }
 
 
-void clearLinesFromField(std::array<char, FIELD_LENGTH> & field,
+void clearLinesFromField(std::array<char, FIELD_LENGTH>& field,
 	int numLinesToClear, int lowestLineToClear)
 {
 	while (numLinesToClear > 0)
@@ -412,21 +475,19 @@ void clearLinesFromField(std::array<char, FIELD_LENGTH> & field,
 }
 
 
-void drawPiece(const std::string & piece, const int sideLength,
-	const int currentX, const int currentY, const int currentRotation)
+void drawPiece(Tetromino& t)
 {
-	for (int y = 0; y < sideLength; y++)
+	for (int y = 0; y < t.sidelen; y++)
 	{
-		const int drawY = currentY + y;
-		for (int x = 0; x < sideLength; x++)
+		const int drawY = t.y + y;
+		for (int x = 0; x < t.sidelen; x++)
 		{
-			const int pieceIndex = getPieceIndexForRotation(piece, sideLength, x, y, currentRotation);
-			const char charSprite = piece.at(pieceIndex);
-			if (charSprite != ' ')
-			{
-				const int drawX = currentX + x;
-				mvaddch(drawY, drawX, charSprite);
-			}
+			const int pieceIndex = getPieceIndexForRotation(t, x, y);
+			const char charSprite = t.getSpriteChar(pieceIndex);
+			if (charSprite == ' ')
+				continue;
+			const int drawX = t.x + x;
+			mvaddch(drawY, drawX, charSprite);
 		}
 	}
 
@@ -434,77 +495,42 @@ void drawPiece(const std::string & piece, const int sideLength,
 }
 
 
-int getPieceIndexForRotation(const std::string & piece, const int sideLength,
-	const int x, const int y, const int rotation)
+int getPieceIndexForRotation(Tetromino& t, int const x, int const y)
 {
-	const int numPoints = piece.length();
 	int index {0};
-
-	// "O" block rotations are irrelevant
-	if (sideLength < 3)
+	
+	/*
+	// Old method using arithmetic:
+	// The "O" tetromino's rotation is irrelevant
+	if (t.sidelen < 3)
 		return index;
-
-	// For 3x3 shapes:
-	//
-	// 0 degrees:
-	// 0 1 2
-	// 3 4 5
-	// 6 7 8
-	//
-	// 90 degrees:
-	// 6 3 0
-	// 7 4 1
-	// 8 5 2
-	//
-	// 180 degrees:
-	// 8 7 6
-	// 5 4 3
-	// 2 1 0
-	//
-	// 270 degrees:
-	// 2 5 8
-	// 1 4 7
-	// 0 3 6
-
-	// For 4x4 shapes:
-	//
-	// 0 degrees:
-	//  0  1  2  3
-	//  4  5  6  7
-	//  8  9 10 11
-	// 12 13 14 15
-	//
-	// 90 degrees:
-	// 12  8  4  0
-	// 13  9  5  1
-	// 14 10  6  2
-	// 15 11  7  3
-	//
-	// 180 degrees:
-	// 15 14 13 12
-	// 11 10  9  8
-	//  7  6  5  4
-	//  3  2  1  0
-	//
-	// 270 degrees:
-	//  3  7 11 15
-	//  2  6 10 14
-	//  1  5  9 13
-	//  0  4  8 12
-		
-	switch (rotation)
+	switch (t.rot)
 	{
 	case 0:
-		index = (y * sideLength) + x;
+		index = (y * t.sidelen) + x;
 		break;
 	case 1:
-		index = (numPoints - sideLength) + y - (x * sideLength);
+		index = (t.getSpriteLen() - t.sidelen) + y - (x * t.sidelen);
 		break;
 	case 2:
-		index = (numPoints - 1) - (y * sideLength) - x;
+		index = (t.getSpriteLen() - 1) - (y * t.sidelen) - x;
 		break;
 	case 3:
-		index = (sideLength - 1) - y + (x * sideLength);
+		index = (t.sidelen - 1) - y + (x * t.sidelen);
+		break;
+	}
+	*/
+
+	// New method using tables:
+	switch (t.sidelen)
+	{
+	case 3:
+		index = threeRot.at(t.rot).at(y).at(x);
+		break;
+	case 4:
+		index = fourRot.at(t.rot).at(y).at(x);
+		break;
+	default:
 		break;
 	}
 
@@ -512,44 +538,26 @@ int getPieceIndexForRotation(const std::string & piece, const int sideLength,
 }
 
 
-bool pieceCanFit(const std::array<char, FIELD_LENGTH> & field,
-	const std::string & piece, const int sideLength, const int pieceX,
-	const int pieceY, const int rotation)
+bool pieceCanFit(const std::array<char, FIELD_LENGTH>& field, Tetromino& t)
 {
-	for (int y = 0; y < sideLength; y++)
+	for (int y = 0; y < t.sidelen; y++)
 	{
-		const int screenRow = pieceY + y;
+		const int screenRow = t.y + y;
 		const int fieldRow = screenRow * FIELD_WIDTH;
-		for (int x = 0; x < sideLength; x++)
+		for (int x = 0; x < t.sidelen; x++)
 		{
-			const int pieceIndex = getPieceIndexForRotation(piece, sideLength, x, y, rotation);
-			if (piece.at(pieceIndex) != ' ')
+			const int pieceIndex = getPieceIndexForRotation(t, x, y);
+			if (t.getSpriteChar(pieceIndex) == ' ')
+				continue;
+			const int screenCol = t.x + x;
+			if (screenCol < 1 ||
+				screenCol >= FIELD_WIDTH ||
+				screenRow >= FIELD_HEIGHT ||
+				field.at(fieldRow + screenCol) != ' ')
 			{
-				const int screenCol = pieceX + x;
-				if (screenCol < 1 || screenCol >= FIELD_WIDTH ||
-				    screenRow >= FIELD_HEIGHT ||
-				    field.at(fieldRow + screenCol) != ' ')
-				{
-					return false;
-				}
+				return false;
 			}
 		}
 	}
-
 	return true;
 }
-
-
-void shuffleArray(std::array<int, 7> & bag, std::default_random_engine & re)
-{
-	// Fisher-Yates shuffle
-	for (int i = bag.size() - 1; i >= 1; i--)
-	{
-		std::uniform_int_distribution<int> intDist(0, i);
-		const int j = intDist(re);
-		const int temp = bag.at(i);
-		bag.at(i) = bag.at(j);
-		bag.at(j) = temp;
-	}
-}
-

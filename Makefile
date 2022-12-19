@@ -1,7 +1,7 @@
 CC := gcc
 CFLAGS := -Wall
 CXX := g++
-CXXFLAGS := -std=c++11 -Wall
+CXXFLAGS := -std=c++17 -Wall
 LDFLAGS := -lncurses
 .PHONY: all c cpp clean
 
