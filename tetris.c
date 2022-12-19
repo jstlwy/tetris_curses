@@ -119,7 +119,6 @@ int main(void)
 	// -------------------------
 	// Initialize ncurses screen
 	// -------------------------
-
 	initscr();
 	// Make user-typed characters immediately available
 	cbreak();
