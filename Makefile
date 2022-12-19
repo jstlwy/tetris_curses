@@ -1,15 +1,27 @@
+CC := gcc
+CFLAGS := -Wall
 CXX := g++
 CXXFLAGS := -std=c++11 -Wall
 LDFLAGS := -lncurses
-.PHONY: clean
+.PHONY: all c cpp clean
 
-binary := tetris
+bin := tetris
+cbin := $(bin)_c
+cppbin := $(bin)_cpp
 
-$(binary): main.o
+all: cpp c
+
+cpp: $(cppbin)
+$(cppbin): $(cppbin).o
 	$(CXX) $(LDFLAGS) $^ -o $@
-
-%.o: %.cpp
+$(cppbin).o: $(bin).cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+c: $(cbin)
+$(cbin): $(cbin).o
+	$(CC) $(LDFLAGS) $^ -o $@
+$(cbin).o: $(bin).c
+	$(CC) $(CFLAGS) -c $< -o $@
+
 clean:
-	rm -f *.o $(binary)
+	rm -f *.o $(cbin) $(cppbin)

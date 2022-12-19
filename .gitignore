@@ -1,3 +1,9 @@
+# macOS-specific
 .DS_Store
-tetris
+
+# Binaries
+tetris_c
+tetris_cpp
+
+# Object files
 *.o
