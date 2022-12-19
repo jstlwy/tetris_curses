@@ -8,7 +8,7 @@ int const FIELD_WIDTH = 12;
 int const FIELD_HEIGHT = 18;
 int const FIELD_LENGTH = FIELD_WIDTH * FIELD_HEIGHT;
 
-struct tetronimo {
+struct tetromino {
 	int length;
 	int sideLength;
 	int x;
@@ -24,13 +24,59 @@ void drawHUD(int const score, int const numLinesCleared, int const level);
 void clearLinesFromField(char field[const FIELD_LENGTH],
 	int numLinesToClear, int lowestLineToClear);
 
-void drawPiece(struct tetronimo const*const t);
+void drawPiece(struct tetromino const*const t);
 
-int getPieceIndexForRotation(struct tetronimo const*const t);
+//=================
+// ROTATION TABLES
+//=================
+// For 3x3 shapes:
+int const threeRot[4][3][3] = {
+	// 0 degrees:
+	{{0, 1, 2},
+	 {3, 4, 5},
+	 {6, 7, 8}},
+	// 90 degrees:
+	{{6, 3, 0},
+	 {7, 4, 1},
+	 {8, 5, 2}},
+	// 180 degrees:
+	{{8, 7, 6},
+	 {5, 4, 3},
+	 {2, 1, 0}},
+	// 270 degrees:
+	{{2, 5, 8},
+	 {1, 4, 7},
+	 {0, 3, 6}}
+};
+// For 4x4 shapes:
+int const fourRot[4][4][4] = {
+	// 0 degrees:
+	{{ 0,  1,  2,  3},
+	 { 4,  5,  6,  7},
+	 { 8,  9, 10, 11},
+	 {12, 13, 14, 15}},
+	// 90 degrees:
+	{{12,  8,  4,  0},
+	 {13,  9,  5,  1},
+	 {14, 10,  6,  2},
+	 {15, 11,  7,  3}},
+	// 180 degrees:
+	{{15, 14, 13, 12},
+	 {11, 10,  9,  8},
+	 { 7,  6,  5,  4},
+	 { 3,  2,  1,  0}},
+	// 270 degrees:
+	{{ 3,  7, 11, 15},
+	 { 2,  6, 10, 14},
+	 { 1,  5,  9, 13},
+	 { 0,  4,  8, 12}}
+};
+int getPieceIndexForRotation(struct tetromino const*const t,
+	int const x, int const y);
 
-bool pieceCanFit(char field[const FIELD_LENGTH], struct tetronimo const*const t);
+bool pieceCanFit(char field[const FIELD_LENGTH], struct tetromino const*const t);
 
-void shuffleArray(int bag[const 7]);
+void shuffleArray(int bag[static 7]);
 
 long getTimeDiff(struct timespec* start, struct timespec* stop);
 
@@ -95,7 +141,7 @@ int main(void)
 	// --------------------
 	int currentBagIndex = 0;
 	int currentPieceNum = pieceBag[currentBagIndex];
-	struct tetronimo t;
+	struct tetromino t;
 	t.length = tetrominoLengths[currentPieceNum];
 	t.sideLength = tetrominoSideLengths[currentPieceNum];
 	t.x = 4;
@@ -206,7 +252,7 @@ int main(void)
 				int const fieldYOffset = (t.y + y) * FIELD_WIDTH;
 				for (int x = 0; x < t.sideLength; x++)
 				{
-					int const pieceIndex = getPieceIndexForRotation(&t);
+					int const pieceIndex = getPieceIndexForRotation(&t, x, y);
 					char const charSprite = t.sprite[pieceIndex];
 					if (charSprite == ' ')
 						continue;
@@ -418,14 +464,14 @@ void clearLinesFromField(char field[FIELD_LENGTH],
 }
 
 
-void drawPiece(struct tetronimo const*const t)
+void drawPiece(struct tetromino const*const t)
 {
 	for (int y = 0; y < t->sideLength; y++)
 	{
 		int const drawY = t->y + y;
 		for (int x = 0; x < t->sideLength; x++)
 		{
-			int const pieceIndex = getPieceIndexForRotation(t);
+			int const pieceIndex = getPieceIndexForRotation(t, x, y);
 			char const charSprite = t->sprite[pieceIndex];
 			if (charSprite == ' ')
 				continue;
@@ -437,74 +483,43 @@ void drawPiece(struct tetronimo const*const t)
 }
 
 
-int getPieceIndexForRotation(struct tetronimo const*const t)
+int getPieceIndexForRotation(struct tetromino const*const t,
+	const int x, const int y)
 {
 	int index = 0;
+
+	/*
+	// Old method using arithmetic:
 	// The "O" tetromino's rotation is irrelevant
 	if (t->sideLength < 3)
 		return index;
-
-	// For 3x3 shapes:
-	//
-	// 0 degrees:
-	// 0 1 2
-	// 3 4 5
-	// 6 7 8
-	//
-	// 90 degrees:
-	// 6 3 0
-	// 7 4 1
-	// 8 5 2
-	//
-	// 180 degrees:
-	// 8 7 6
-	// 5 4 3
-	// 2 1 0
-	//
-	// 270 degrees:
-	// 2 5 8
-	// 1 4 7
-	// 0 3 6
-
-	// For 4x4 shapes:
-	//
-	// 0 degrees:
-	//  0  1  2  3
-	//  4  5  6  7
-	//  8  9 10 11
-	// 12 13 14 15
-	//
-	// 90 degrees:
-	// 12  8  4  0
-	// 13  9  5  1
-	// 14 10  6  2
-	// 15 11  7  3
-	//
-	// 180 degrees:
-	// 15 14 13 12
-	// 11 10  9  8
-	//  7  6  5  4
-	//  3  2  1  0
-	//
-	// 270 degrees:
-	//  3  7 11 15
-	//  2  6 10 14
-	//  1  5  9 13
-	//  0  4  8 12
-		
 	switch (t->rot)
 	{
 	case 0:
-		index = (t->y * t->sideLength) + t->x;
+		index = (y * t->sideLength) + x;
 		break;
 	case 1:
-		index = (t->length - t->sideLength) + t->y - (t->x * t->sideLength);
+		index = (t->length - t->sideLength) + y - (x * t->sideLength);
 		break;
 	case 2:
-		index = (t->length - 1) - (t->y * t->sideLength) - t->x;
+		index = (t->length - 1) - (y * t->sideLength) - x;
 		break;
 	case 3:
-		index = (t->sideLength - 1) - t->y + (t->x * t->sideLength);
+		index = (t->sideLength - 1) - y + (x * t->sideLength);
+		break;
+	}
+	*/
+
+	// New method using tables:
+	switch (t->sideLength)
+	{
+	case 3:
+		index = threeRot[t->rot][y][x];
+		break;
+	case 4:
+		index = fourRot[t->rot][y][x];
+		break;
+	default:
 		break;
 	}
 
@@ -512,7 +527,7 @@ int getPieceIndexForRotation(struct tetronimo const*const t)
 }
 
 
-bool pieceCanFit(char field[const FIELD_LENGTH], struct tetronimo const*const t)
+bool pieceCanFit(char field[const FIELD_LENGTH], struct tetromino const*const t)
 {
 	for (int y = 0; y < t->sideLength; y++)
 	{
@@ -520,7 +535,7 @@ bool pieceCanFit(char field[const FIELD_LENGTH], struct tetronimo const*const t)
 		int const fieldRow = screenRow * FIELD_WIDTH;
 		for (int x = 0; x < t->sideLength; x++)
 		{
-			int const pieceIndex = getPieceIndexForRotation(t);
+			int const pieceIndex = getPieceIndexForRotation(t, x, y);
 			if (t->sprite[pieceIndex] == ' ')
 				continue;
 			int const screenCol = t->x + x;
@@ -537,7 +552,7 @@ bool pieceCanFit(char field[const FIELD_LENGTH], struct tetronimo const*const t)
 }
 
 
-void shuffleArray(int bag[7])
+void shuffleArray(int bag[static 7])
 {
 	// Fisher-Yates shuffle
 	for (int i = 6; i >= 1; i--)
